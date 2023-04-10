@@ -86,12 +86,13 @@ where
 
 #[cfg(test)]
 mod tests {
+    use cosmrs::proto::cosmos::bank::v1beta1::QueryBalanceRequest;
     use cosmwasm_std::Coin;
     use osmosis_std::types::cosmos::base::v1beta1;
     use osmosis_std::types::osmosis::tokenfactory::v1beta1::{MsgCreateDenom, MsgMint};
     use test_tube::Account;
 
-    use crate::{OsmosisTestApp, TokenFactory};
+    use crate::{Bank, OsmosisTestApp, TokenFactory};
 
     use super::*;
 
@@ -176,6 +177,16 @@ mod tests {
 
         assert_eq!(pool_id, 1);
 
+        let bank = Bank::new(&app);
+        let res0 = bank.query_balance(&QueryBalanceRequest {
+            address: signer.address(), denom: denom0.clone()
+        }).unwrap();
+        assert_eq!("100000000000", res0.balance.unwrap().amount);
+        let res1 = bank.query_balance(&QueryBalanceRequest {
+            address: signer.address(), denom: denom1.clone()
+        }).unwrap();
+        assert_eq!("100000000000", res1.balance.unwrap().amount);
+
         let position_id = concentrated_liquidity
             .create_position(
                 MsgCreatePosition {
@@ -184,14 +195,15 @@ mod tests {
                     lower_tick: 0,
                     upper_tick: 100,
                     token_desired0: Some(v1beta1::Coin {
-                        denom: denom0,
-                        amount: "10000000000".to_string(),
+                        denom: denom0.clone(),
+                        amount: "100000000000".to_string(),
                     }),
                     token_desired1: Some(v1beta1::Coin {
-                        denom: denom1,
-                        amount: "10000000000".to_string(),
+                        denom: denom1.clone(),
+                        amount: "100000000000".to_string(),
                     }),
-                    token_min_amount0: "0".to_string(),
+                    // The user's denom0 is taken and not denom1. Not sure why.
+                    token_min_amount0: "100000000000".to_string(),
                     token_min_amount1: "0".to_string(),
                 },
                 &signer,
@@ -201,5 +213,26 @@ mod tests {
             .position_id;
 
         assert_eq!(position_id, 1);
+
+
+        // I expected denom0 to have been taken from the user, but not so.
+        let res0 = bank.query_balance(&QueryBalanceRequest {
+            address: signer.address(), denom: denom0.clone()
+        }).unwrap();
+        assert_eq!("100000000000", res0.balance.unwrap().amount);
+
+        // denom1 gets taken instead?
+        let res1 = bank.query_balance(&QueryBalanceRequest {
+            address: signer.address(), denom: denom1.clone()
+        }).unwrap();
+        assert_eq!("0", res1.balance.unwrap().amount);
+
+        let res =
+            concentrated_liquidity
+                .query_position_by_id(&QueryPositionByIdRequest { position_id }).unwrap();
+
+        // Far more zeros here?
+        assert_eq!("100000000000000000000000000000".to_string(), res.position.clone().unwrap().asset0);
+        assert_eq!("0".to_string(), res.position.unwrap().asset1);
     }
 }
