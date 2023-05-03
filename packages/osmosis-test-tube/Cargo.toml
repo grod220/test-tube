@@ -12,6 +12,9 @@ exclude = [
   "test_artifacts",
 ]
 
+[features]
+v16 = []
+
 [dependencies]
 base64 = "0.13.0"
 cosmrs = {version = "0.9.0", features = ["cosmwasm"]}
